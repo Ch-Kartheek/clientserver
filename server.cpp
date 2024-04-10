@@ -3,54 +3,90 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
-#include <map>
-#include <vector>
+#include <arpa/inet.h>
+#include <sqlite3.h>
 #include <thread>
-#include <tuple>
+#include <vector>
+
+#define SQLITE_OK 0
 
 // Function to handle each client connection
-void handleClient(int clientSocket, int clientNumber, std::map<int, int>& clientMap, std::map<std::string, std::tuple<int, int, int>>& studentData) {
+void handleClient(int clientSocket, sqlite3* db) {
     while (true) {
         char idBuffer[256];
         ssize_t bytesReceived = recv(clientSocket, idBuffer, sizeof(idBuffer), 0);
         if (bytesReceived <= 0) {
-            // If no data received or an error occurred, check if client is still connected
             if (bytesReceived == 0)
-                std::cout << "Client " << clientNumber << " disconnected." << std::endl;
+                std::cout << "Client disconnected." << std::endl;
             else
-                std::cerr << "Error receiving data from client " << clientNumber << std::endl;
+                std::cerr << "Error receiving data from client." << std::endl;
 
             close(clientSocket);
-            clientMap.erase(clientNumber);
             return;
         }
 
-        std::cout << "Received ID number from Client " << clientNumber << ": " << idBuffer << std::endl;
-
         std::string idString(idBuffer);
-        auto it = studentData.find(idString);
-        if (it != studentData.end()) {
-            int mathMarks, physicsMarks, chemistryMarks;
-            std::tie(mathMarks, physicsMarks, chemistryMarks) = it->second;
-            send(clientSocket, &mathMarks, sizeof(mathMarks), 0);
-            send(clientSocket, &physicsMarks, sizeof(physicsMarks), 0);
-            send(clientSocket, &chemistryMarks, sizeof(chemistryMarks), 0);
-            std::cout << "Sent marks to Client " << clientNumber << std::endl;
+
+        // Prepare the SQL query with placeholder for hallticketno
+        const char* sql = "SELECT maths, physics, chemistry FROM student WHERE hallticketno = ?";
+        sqlite3_stmt* stmt;
+        int rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+        if (rc != SQLITE_OK) {
+            std::cerr << "Error preparing statement: " << sqlite3_errmsg(db) << std::endl;
+            close(clientSocket);
+            return;
+        }
+
+        // Bind the hallticket number to the placeholder
+        int hallticketno = std::stoi(idString);
+        rc = sqlite3_bind_int(stmt, 1, hallticketno);
+        if (rc != SQLITE_OK) {
+            std::cerr << "Error binding parameter: " << sqlite3_errmsg(db) << std::endl;
+            sqlite3_finalize(stmt);
+            close(clientSocket);
+            return;
+        }
+
+        // Execute the query and send results to client
+        rc = sqlite3_step(stmt);
+        if (rc == SQLITE_ROW) {
+            int maths = sqlite3_column_int(stmt, 0);
+            int physics = sqlite3_column_int(stmt, 1);
+            int chemistry = sqlite3_column_int(stmt, 2);
+            // Send results to client
+            send(clientSocket, &maths, sizeof(maths), 0);
+            send(clientSocket, &physics, sizeof(physics), 0);
+            send(clientSocket, &chemistry, sizeof(chemistry), 0);
+            std::cout << "Sent marks to client." << std::endl;
         } else {
             const char* notFoundMessage = "Data not found.";
             send(clientSocket, notFoundMessage, strlen(notFoundMessage), 0);
-            std::cout << "Data not found for Client " << clientNumber << std::endl;
+            std::cout << "Data not found for client." << std::endl;
         }
+
+        // Clean up resources
+        sqlite3_finalize(stmt);
     }
 }
 
 int main() {
-    int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-    if (serverSocket == -1) {
-        std::cerr << "Error creating socket." << std::endl;
+    sqlite3* db;
+    int rc = sqlite3_open("results.db", &db);
+    if (rc != SQLITE_OK) {
+        std::cerr << "Error opening database: " << sqlite3_errmsg(db) << std::endl;
+        sqlite3_close(db);
         return 1;
     }
 
+    // Create a socket
+    int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverSocket == -1) {
+        std::cerr << "Error creating socket." << std::endl;
+        sqlite3_close(db);
+        return 1;
+    }
+
+    // Bind to address and port
     sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_addr.s_addr = INADDR_ANY;
@@ -59,25 +95,19 @@ int main() {
     if (bind(serverSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) == -1) {
         std::cerr << "Bind failed." << std::endl;
         close(serverSocket);
+        sqlite3_close(db);
         return 1;
     }
 
+    // Listen for incoming connections
     listen(serverSocket, 5);
-
     std::cout << "Server is listening..." << std::endl;
 
-    std::map<std::string, std::tuple<int, int, int>> studentData = {
-        {"1", std::make_tuple(90, 85, 78)},
-        {"2", std::make_tuple(85, 80, 75)},
-        {"3", std::make_tuple(92, 88, 80)},
-        {"4", std::make_tuple(88, 82, 79)},
-        {"5", std::make_tuple(89, 84, 77)}
-    };
-
-    std::map<int, int> clientMap;
-    int clientNumber = 1;
+    // Vector to store thread objects
+    std::vector<std::thread> threads;
 
     while (true) {
+        // Accept incoming connection
         sockaddr_in clientAddress;
         socklen_t clientAddrLen = sizeof(clientAddress);
         int clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddress, &clientAddrLen);
@@ -86,13 +116,13 @@ int main() {
             continue;
         }
 
-        clientMap[clientNumber] = clientSocket;
-        std::thread(handleClient, clientSocket, clientNumber, std::ref(clientMap), std::ref(studentData)).detach();
-        std::cout << "Client " << clientNumber << " connected." << std::endl;
-        clientNumber++;
+        // Create a new thread to handle the client
+        threads.emplace_back(handleClient, clientSocket, db);
     }
 
+    // Close server socket and database connection (should never reach here)
     close(serverSocket);
+    sqlite3_close(db);
 
     return 0;
 }

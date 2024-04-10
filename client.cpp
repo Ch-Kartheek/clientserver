@@ -26,27 +26,29 @@ int main() {
     }
 
     while (true) {
-        // Prompt user for ID number
-        std::cout << "Enter your ID number (or type 'quit' to exit): ";
-        std::string idNumber;
-        std::cin >> idNumber;
+        // Prompt user for hall ticket number
+        std::cout << "Enter your hall ticket number (or type 'quit' to exit): ";
+        std::string hallTicketNo;
+        std::cin >> hallTicketNo;
 
-        if (idNumber == "quit") {
+        if (hallTicketNo == "quit") {
             break;
         }
 
-        // Send ID number to server
-        send(clientSocket, idNumber.c_str(), idNumber.size(), 0);
+        // Send hall ticket number to server
+        send(clientSocket, hallTicketNo.c_str(), hallTicketNo.size(), 0);
 
         // Receive and display subject marks from server
-        int mathMarks, physicsMarks, chemistryMarks;
-        recv(clientSocket, &mathMarks, sizeof(mathMarks), 0);
-        recv(clientSocket, &physicsMarks, sizeof(physicsMarks), 0);
-        recv(clientSocket, &chemistryMarks, sizeof(chemistryMarks), 0);
+        int maths, physics, chemistry;
 
-        std::cout << "Maths Marks: " << mathMarks << std::endl;
-        std::cout << "Physics Marks: " << physicsMarks << std::endl;
-        std::cout << "Chemistry Marks: " << chemistryMarks << std::endl;
+        // Receive marks
+        recv(clientSocket, &maths, sizeof(maths), 0);
+        recv(clientSocket, &physics, sizeof(physics), 0);
+        recv(clientSocket, &chemistry, sizeof(chemistry), 0);
+
+        std::cout << "Maths Marks: " << maths << std::endl;
+        std::cout << "Physics Marks: " << physics << std::endl;
+        std::cout << "Chemistry Marks: " << chemistry << std::endl;
     }
 
     // Close socket
