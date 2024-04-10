@@ -6,7 +6,7 @@
 int main() {
     sqlite3 *db;
     int rc;
-    sqlite3_stmt *stmt;
+    sqlite3_stmt *stmt; // Statement handle for prepared statement
 
     int hallticketno;
     std::string name;
