@@ -17,7 +17,7 @@ int main() {
     sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_addr.s_addr = inet_addr("127.0.0.1");  // Server IP address
-    serverAddress.sin_port = htons(5789);                    // Server port
+    serverAddress.sin_port = htons(6080);                    // Server port
 
     if (connect(clientSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) == -1) {
         std::cerr << "Error connecting to server." << std::endl;

@@ -71,7 +71,7 @@ void handleClient(int clientSocket, sqlite3* db) {
 
 int main() {
     sqlite3* db;
-    int rc = sqlite3_open("results.db", &db);
+    int rc = sqlite3_open("/app/results.db", &db);
     if (rc != SQLITE_OK) {
         std::cerr << "Error opening database: " << sqlite3_errmsg(db) << std::endl;
         sqlite3_close(db);
@@ -90,7 +90,7 @@ int main() {
     sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_addr.s_addr = INADDR_ANY;
-    serverAddress.sin_port = htons(5789);
+    serverAddress.sin_port = htons(6080);
 
     if (bind(serverSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) == -1) {
         std::cerr << "Bind failed." << std::endl;
