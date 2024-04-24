@@ -9,14 +9,17 @@ runserver: server
 client: client.o
 	g++ client.o -o client
 
-client.o: client.cpp
-	g++ -c client.cpp -o client.o
-
 server: server.o
 	g++ server.o -o server -l sqlite3
 
-server.o: server.cpp
-	g++ -c server.cpp -o server.o
+%.o: %.cpp
+	g++ -c $< -o $@
+
+# Check if sqlite3 executable exists
+ifeq (, $(shell which sqlite3))
+    $(error "sqlite3 not found in PATH. Please install SQLite3.")
+endif
 
 clean:
-	rm -f server.o client.o server client
+	rm -f *.o server client
+
